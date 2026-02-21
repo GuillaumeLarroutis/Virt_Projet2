@@ -1,0 +1,7 @@
+services:
+  wordpress:
+    image: wordpress:latest
+  web:
+    image: dolibarr/dolibarr:latest
+    ports: 
+      - 80:80

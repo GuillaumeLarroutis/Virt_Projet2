@@ -1,0 +1,38 @@
+services:
+  php:
+    build: 
+      dockerfile: Dockerfile
+    ports:
+      - 80:80
+    volumes: 
+      - ./php_data:/var/www/html
+    networks:
+      - bridge_networks_1 
+  db: 
+    image: mariadb 
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: demo
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    networks:
+      - bridge_networks_1 
+  adminer: 
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - bridge_networks_ 
+  bot:
+    build:
+      dockerfile: Dockerfile
+    volumes: 
+      - ./bot/scriptFortune.sh:/var/www/index.html
+    networks:
+      - bridge_networks_1 
+      
+networks:
+  bridge_networks_1:
+    driver: bridge
+
