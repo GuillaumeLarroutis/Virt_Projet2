@@ -1,7 +1,168 @@
 services:
   wordpress:
     image: wordpress:latest
+    container_name: wordpress
+    volumes:
+      - ./wp-content:/var/www/html/wp-content
+    environment:
+      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_TABLE_PREFIX=wp_
+      - WORDPRESS_DB_HOST=db
+      - WORDPRESS_DB_USER=root
+      - WORDPRESS_DB_PASSWORD=password
+    depends_on:
+      - db
+      - phpmyadmin
+    restart: always
+    ports:
+      - 8080:80
+
+  db:
+    image: mariadb:latest
+    container_name: db
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./dump.sql:/docker-entrypoint-initdb.d/dump.sql
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=password
+      - MYSQL_DATABASE=wordpress
+    restart: always
+
+  phpmyadmin:
+    depends_on:
+      - db
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: phpmyadmin
+    restart: always
+    ports:
+      - 8180:80
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: password
+
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:sts
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    ports:
+      - 9443:9443
+
+  mariadb:
+      image: mariadb:latest
+      environment:
+          MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+          MYSQL_DATABASE: ${MYSQL_DATABASE:-dolidb}
+          MYSQL_USER: ${MYSQL_USER:-dolidbuser}
+          MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dolidbpass}
+
+      volumes:
+          - /home/dolibarr_mariadb:/var/lib/mysql
+
   web:
-    image: dolibarr/dolibarr:latest
-    ports: 
-      - 80:80
+      image: dolibarr/dolibarr:latest
+      environment:
+          DOLI_INIT_DEMO: ${DOLI_INIT_DEMO:-0}
+          DOLI_DB_HOST: ${DOLI_DB_HOST:-mariadb}
+          DOLI_DB_NAME: ${DOLI_DB_NAME:-dolidb}
+          DOLI_DB_USER: ${DOLI_DB_USER:-dolidbuser}
+          DOLI_DB_PASSWORD: ${DOLI_DB_PASSWORD:-dolidbpass}
+          DOLI_URL_ROOT: "${DOLI_URL_ROOT:-http://0.0.0.0}"
+          DOLI_ADMIN_LOGIN: "${DOLI_ADMIN_LOGIN:-admin}"
+          DOLI_ADMIN_PASSWORD: "${DOLI_ADMIN_PASSWORD:-admin}"
+          DOLI_CRON: ${DOLI_CRON:-0}
+          DOLI_CRON_KEY: ${DOLI_CRON_KEY:-mycronsecurekey}
+          DOLI_COMPANY_NAME: ${DOLI_COMPANY_NAME:-MyBigCompany}
+          WWW_USER_ID: ${WWW_USER_ID:-1000}
+          WWW_GROUP_ID: ${WWW_GROUP_ID:-1000}
+      ports:
+          - 8083:80
+      links:
+          - mariadb
+      volumes:
+          - /home/dolibarr_documents:/var/www/documents
+          - /home/dolibarr_custom:/var/www/html/custom
+
+  owncloud:
+    image: owncloud/server:10.16
+    container_name: owncloud_server
+    restart: always
+    ports:
+      - 8082:8080
+    depends_on:
+      - mariadbOwnCloud
+      - redis
+    environment:
+      - OWNCLOUD_DOMAIN=localhost:8080
+      - OWNCLOUD_TRUSTED_DOMAINS=localhost
+      - OWNCLOUD_DB_USERNAME=owncloud
+      - OWNCLOUD_DB_PASSWORD=owncloud
+      - OWNCLOUD_DB_HOST=mariadb
+      - OWNCLOUD_ADMIN_USERNAME=admin
+      - OWNCLOUD_ADMIN_PASSWORD=admin
+      - OWNCLOUD_MYSQL_UTF8MB4=true
+      - OWNCLOUD_REDIS_ENABLED=true
+      - OWNCLOUD_REDIS_HOST=redis
+    healthcheck:
+      test: ["CMD", "/usr/bin/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - files:/mnt/data
+
+  mariadbOwnCloud:
+    image: mariadb:10.11
+    container_name: owncloud_mariadb
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=owncloud
+      - MYSQL_USER=owncloud
+      - MYSQL_PASSWORD=owncloud
+      - MYSQL_DATABASE=owncloud
+      - MARIADB_AUTO_UPGRADE=1
+    command: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "--password=owncloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mysql:/var/lib/mysql
+
+
+  redis:
+    image: redis:6
+    container_name: owncloud_redis
+    restart: always
+    command: ["--databases", "1"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis:/data
+
+
+
+volumes:
+  portainer_data:
+    name: portainer_data
+  db_data: 
+  files:
+    driver: local
+  mysql:
+    driver: local
+  redis:
+    driver: local
+ 
+
+networks:
+  default:
+    name: portainer_network
+
